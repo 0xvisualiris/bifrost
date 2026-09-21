@@ -1,16 +1,14 @@
 use std::collections::HashSet;
 
-use chrono::Utc;
 use maplit::btreeset;
 use serde_json::json;
 use uuid::Uuid;
 
 use hue::api::{
-    BridgeHome, Button, ButtonData, ButtonMetadata, ButtonReport, DeviceArchetype,
-    DeviceProductData, Entertainment, EntertainmentSegment, EntertainmentSegments, GroupedLight,
-    Light, LightEffects, LightEffectsV2, LightMetadata, Metadata, RType, Resource, ResourceLink,
-    Room, RoomArchetype, RoomMetadata, Scene, SceneActive, SceneMetadata, SceneRecall, SceneStatus,
-    Stub, Taurus, ZigbeeConnectivity, ZigbeeConnectivityStatus,
+    BridgeHome, DeviceProductData, Entertainment, EntertainmentSegment, EntertainmentSegments,
+    GroupedLight, Light, LightEffects, LightEffectsV2, LightMetadata, RType, Resource,
+    ResourceLink, Room, RoomArchetype, RoomMetadata, Scene, SceneActive, SceneMetadata,
+    SceneRecall, SceneStatus, Stub, Taurus, ZigbeeConnectivity, ZigbeeConnectivityStatus,
 };
 use hue::scene_icons;
 use z2m::api::ExposeLight;
@@ -142,58 +140,6 @@ impl Z2mBackend {
         res.add(&link_enttm, Resource::Entertainment(enttm))?;
         res.add(&link_taurus, Resource::Taurus(taurus))?;
         res.add(&link_zigcon, Resource::ZigbeeConnectivity(zigcon))?;
-        drop(res);
-
-        Ok(())
-    }
-
-    pub async fn add_switch(&mut self, dev: &z2m::api::Device) -> ApiResult<()> {
-        let name = &dev.friendly_name;
-
-        let link_device = RType::Device.deterministic(&dev.ieee_address);
-        let link_button = RType::Button.deterministic(&dev.ieee_address);
-        let link_zbc = RType::ZigbeeConnectivity.deterministic(&dev.ieee_address);
-
-        let dev = hue::api::Device {
-            product_data: DeviceProductData::guess_from_device(dev),
-            metadata: Metadata::new(DeviceArchetype::UnknownArchetype, "foo"),
-            services: btreeset![link_button, link_zbc],
-            identify: None,
-            usertest: None,
-        };
-
-        self.map.insert(name.to_string(), link_button);
-        self.rmap.insert(link_button, name.to_string());
-
-        let mut res = self.state.lock().await;
-        let button = Button {
-            owner: link_device,
-            metadata: ButtonMetadata { control_id: 0 },
-            button: ButtonData {
-                last_event: None,
-                button_report: Some(ButtonReport {
-                    updated: Utc::now(),
-                    event: String::from("initial_press"),
-                }),
-                repeat_interval: Some(100),
-                event_values: Some(json!(["initial_press", "repeat"])),
-            },
-        };
-
-        let zbc = ZigbeeConnectivity {
-            owner: link_device,
-            mac_address: String::from("11:22:33:44:55:66:77:89"),
-            status: ZigbeeConnectivityStatus::ConnectivityIssue,
-            channel: Some(json!({
-                "status": "set",
-                "value": "channel_25",
-            })),
-            extended_pan_id: None,
-        };
-
-        res.add(&link_device, Resource::Device(dev))?;
-        res.add(&link_button, Resource::Button(button))?;
-        res.add(&link_zbc, Resource::ZigbeeConnectivity(zbc))?;
         drop(res);
 
         Ok(())

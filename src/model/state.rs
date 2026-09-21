@@ -58,7 +58,9 @@ impl IdMap {
         while self.reverse.contains_key(&self.next_id) {
             self.next_id += 1;
         }
-        self.next_id
+        let id = self.next_id;
+        self.next_id += 1;
+        id
     }
 
     pub fn add(&mut self, uuid: Uuid) -> u32 {

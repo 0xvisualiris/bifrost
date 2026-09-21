@@ -137,11 +137,13 @@ impl Z2mBackend {
             let topic = topic.clone();
 
             // spawn task to stop effect after a few seconds
-            let _job = tokio::spawn(async move {
+            tokio::spawn(async move {
                 sleep(Self::LIGHT_BREATHE_DURATION).await;
 
                 let upd = DeviceUpdate::new().with_effect(DeviceEffect::FinishEffect);
-                tx.send((topic, upd))
+                if tx.send((topic, upd)).is_err() {
+                    log::warn!("Failed to send breathe stop: backend channel closed");
+                }
             });
         }
 
@@ -374,7 +376,6 @@ impl Z2mBackend {
         let mut chans = ent.channels.clone();
 
         let mut addrs: BTreeMap<String, Vec<u16>> = BTreeMap::new();
-        let mut targets = vec![];
         chans.sort_by_key(|c| c.channel_id);
 
         log::trace!("[{}] Resolving entertainment channels", self.name);
@@ -393,21 +394,22 @@ impl Z2mBackend {
                     .get(topic)
                     .ok_or(HueError::NotFound(member.service.rid))?;
 
-                let segment_addr = dev.network_address + member.index;
+                let segment_addr = dev
+                    .network_address
+                    .checked_add(member.index)
+                    .ok_or(HueError::HueZigbeeEncodeError)?;
 
                 addrs
                     .entry(dev.friendly_name.clone())
                     .or_default()
                     .push(segment_addr);
-
-                targets.push(topic);
             }
         }
         log::debug!("Entertainment addresses: {addrs:04x?}");
         drop(lock);
 
-        if let Some(target) = targets.first() {
-            let mut es = EntStream::new(self.counter, target, addrs);
+        if !addrs.is_empty() {
+            let mut es = EntStream::new(self.counter, addrs);
 
             // Not even a real Philips Hue bridge uses this trick!
             //
