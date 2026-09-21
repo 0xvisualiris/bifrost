@@ -5,6 +5,7 @@ on:
     branches: [ "master", "dev" ]
     # Publish semver tags as releases.
     tags: [ "v*.*.*", "dev*" ]
+  workflow_dispatch:
 #  pull_request:
 #    branches: [ "master" ]
 
