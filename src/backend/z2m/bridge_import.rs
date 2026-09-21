@@ -5,10 +5,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 use hue::api::{
-    BridgeHome, DeviceProductData, Entertainment, EntertainmentSegment, EntertainmentSegments,
-    GroupedLight, Light, LightEffects, LightEffectsV2, LightMetadata, RType, Resource,
-    ResourceLink, Room, RoomArchetype, RoomMetadata, Scene, SceneActive, SceneMetadata,
-    SceneRecall, SceneStatus, Stub, Taurus, ZigbeeConnectivity, ZigbeeConnectivityStatus,
+    BridgeHome, Button, ButtonData, ButtonMetadata, DeviceProductData, Entertainment,
+    EntertainmentSegment, EntertainmentSegments, GroupedLight, Light, LightEffects, LightEffectsV2,
+    LightMetadata, Metadata, RType, Resource, ResourceLink, Room, RoomArchetype, RoomMetadata,
+    Scene, SceneActive, SceneMetadata, SceneRecall, SceneStatus, Stub, Taurus, ZigbeeConnectivity,
+    ZigbeeConnectivityStatus,
 };
 use hue::scene_icons;
 use z2m::api::ExposeLight;
@@ -140,6 +141,55 @@ impl Z2mBackend {
         res.add(&link_enttm, Resource::Entertainment(enttm))?;
         res.add(&link_taurus, Resource::Taurus(taurus))?;
         res.add(&link_zigcon, Resource::ZigbeeConnectivity(zigcon))?;
+        drop(res);
+
+        Ok(())
+    }
+
+    pub async fn add_switch(&mut self, apidev: &z2m::api::Device) -> ApiResult<()> {
+        let name = &apidev.friendly_name;
+
+        let link_device = RType::Device.deterministic(&apidev.ieee_address);
+        let link_zigcon = RType::ZigbeeConnectivity.deterministic(&apidev.ieee_address);
+        let link_button = RType::Button.deterministic(&apidev.ieee_address);
+
+        let product_data = DeviceProductData::guess_from_device(apidev);
+        let archetype = product_data.product_archetype.clone();
+
+        let dev = hue::api::Device {
+            product_data,
+            metadata: Metadata::new(archetype, name),
+            services: btreeset![link_zigcon, link_button],
+            identify: Some(Stub),
+            usertest: None,
+        };
+
+        let zigcon = ZigbeeConnectivity {
+            channel: None,
+            extended_pan_id: None,
+            mac_address: apidev.ieee_address.to_string(),
+            owner: link_device,
+            status: ZigbeeConnectivityStatus::Connected,
+        };
+
+        let button = Button {
+            owner: link_device,
+            metadata: ButtonMetadata { control_id: 0 },
+            button: ButtonData {
+                button_report: None,
+                last_event: None,
+                repeat_interval: None,
+                event_values: None,
+            },
+        };
+
+        self.map.insert(name.to_string(), link_device);
+        self.rmap.insert(link_device, name.to_string());
+
+        let mut res = self.state.lock().await;
+        res.add(&link_device, Resource::Device(dev))?;
+        res.add(&link_zigcon, Resource::ZigbeeConnectivity(zigcon))?;
+        res.add(&link_button, Resource::Button(button))?;
         drop(res);
 
         Ok(())

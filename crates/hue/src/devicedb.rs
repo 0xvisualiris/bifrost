@@ -71,6 +71,7 @@ fn make_product_data() -> BTreeMap<&'static str, SimpleProductData<'static>> {
         "RDM002" => SPD::signify("Hue tap dial switch", UnknownArchetype, "100b-121"),
         "RWL021" => SPD::signify("Hue dimmer switch", UnknownArchetype, "100b-109"),
         "RWL022" => SPD::signify("Hue dimmer switch", UnknownArchetype, "100b-119"),
+        "WSM001" => SPD::signify("Hue Wall Switch Module", UnknownArchetype, "100b-122"),
         "SML001" => SPD::signify("Hue motion sensor", UnknownArchetype, "100b-10d"),
         "SML002" => SPD::signify("Hue outdoor motion sensor", UnknownArchetype, "100b-10d"),
         "SML003" => SPD::signify("Hue motion sensor", UnknownArchetype, "100b-11b"),

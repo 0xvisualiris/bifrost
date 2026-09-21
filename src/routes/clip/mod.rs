@@ -1,3 +1,4 @@
+pub mod behavior_instance;
 pub mod device;
 pub mod entertainment_configuration;
 pub mod grouped_light;
@@ -75,12 +76,12 @@ async fn post_resource(
     log::debug!("Json data:\n{}", serde_json::to_string_pretty(&req)?);
 
     match rtype {
+        RType::BehaviorInstance => behavior_instance::post_behavior_instance(&state, req).await,
         RType::EntertainmentConfiguration => ent_conf::post_resource(&state, req).await,
         RType::Scene => scene::post_scene(&state, req).await,
 
         /* Not supported yet by Bifrost */
-        RType::BehaviorInstance
-        | RType::GeofenceClient
+        RType::GeofenceClient
         | RType::Room
         | RType::ServiceGroup
         | RType::SmartScene
@@ -145,6 +146,9 @@ async fn put_resource_id(
 
     match rlink.rtype {
         /* Allowed + supported */
+        RType::BehaviorInstance => {
+            behavior_instance::put_behavior_instance(&state, rlink, put).await
+        }
         RType::Device => device::put_device(&state, rlink, put).await,
         RType::EntertainmentConfiguration => ent_conf::put_resource_id(&state, rlink, put).await,
         RType::GroupedLight => grouped_light::put_grouped_light(&state, rlink, put).await,
@@ -156,8 +160,7 @@ async fn put_resource_id(
         }
 
         /* Allowed, but support is missing in Bifrost */
-        RType::BehaviorInstance
-        | RType::Bridge
+        RType::Bridge
         | RType::Button
         | RType::CameraMotion
         | RType::Contact

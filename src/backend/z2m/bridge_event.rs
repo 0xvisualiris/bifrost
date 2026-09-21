@@ -1,9 +1,13 @@
+use chrono::Utc;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio_tungstenite::tungstenite;
 use uuid::Uuid;
 
-use hue::api::{DimmingUpdate, GroupedLight, Light, LightUpdate, RType, Resource, Room};
+use hue::api::{
+    Button, ButtonReport, Device, DimmingUpdate, GroupedLight, Light, LightUpdate, RType, Resource,
+    Room,
+};
 use z2m::api::{
     BridgeDevices, DeviceRemoveResponse, GroupMemberChange, Message, RawMessage, Response,
 };
@@ -69,11 +73,59 @@ impl Z2mBackend {
         Ok(())
     }
 
-    async fn handle_device_message(&mut self, msg: RawMessage) -> ApiResult<()> {
-        if msg.topic.ends_with("/availability") || msg.topic.ends_with("/action") {
-            // availability: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html#zigbee2mqtt-friendly-name-availability
-            // action: https://www.home-assistant.io/integrations/device_trigger.mqtt/
+    async fn handle_button_action(
+        &mut self,
+        device_name: &str,
+        payload: &Value,
+    ) -> ApiResult<()> {
+        let Some(rlink) = self.map.get(device_name).copied() else {
+            if !self.ignore.contains(device_name) {
+                log::debug!(
+                    "[{}] Button action on unknown device {}",
+                    self.name,
+                    device_name
+                );
+            }
             return Ok(());
+        };
+
+        if rlink.rtype != RType::Device {
+            return Ok(());
+        }
+
+        let Value::String(action) = payload else {
+            return Ok(());
+        };
+
+        let button_link = {
+            let lock = self.state.lock().await;
+            let device = lock.get::<Device>(&rlink)?;
+            device.services.iter().find(|s| s.rtype == RType::Button).copied()
+        };
+
+        if let Some(btn_link) = button_link {
+            let action = action.clone();
+            self.state.lock().await.update::<Button>(&btn_link.rid, |btn| {
+                btn.button.button_report = Some(ButtonReport {
+                    updated: Utc::now(),
+                    event: action.clone(),
+                });
+            })?;
+            log::info!("[{}] Button action: {} → {action}", self.name, device_name);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_device_message(&mut self, msg: RawMessage) -> ApiResult<()> {
+        // availability: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html#zigbee2mqtt-friendly-name-availability
+        if msg.topic.ends_with("/availability") {
+            return Ok(());
+        }
+
+        // action: https://www.home-assistant.io/integrations/device_trigger.mqtt/
+        if let Some(device_name) = msg.topic.strip_suffix("/action") {
+            return self.handle_button_action(device_name, &msg.payload).await;
         }
 
         let Some(ref val) = self.map.get(&msg.topic).copied() else {
@@ -111,16 +163,7 @@ impl Z2mBackend {
                     dev.model_id.as_deref().unwrap_or("<unknown model>")
                 );
                 self.add_light(dev, exp).await?;
-            } else {
-                log::debug!(
-                    "[{}] Ignoring unsupported device {}",
-                    self.name,
-                    dev.friendly_name
-                );
-                self.ignore.insert(dev.friendly_name.to_string());
-            }
-            /*
-            if dev.expose_action() {
+            } else if dev.expose_action() {
                 log::info!(
                     "[{}] Adding switch {:?}: [{}] ({})",
                     self.name,
@@ -129,8 +172,14 @@ impl Z2mBackend {
                     dev.model_id.as_deref().unwrap_or("<unknown model>")
                 );
                 self.add_switch(dev).await?;
+            } else {
+                log::debug!(
+                    "[{}] Ignoring unsupported device {}",
+                    self.name,
+                    dev.friendly_name
+                );
+                self.ignore.insert(dev.friendly_name.to_string());
             }
-            */
         }
 
         Ok(())
