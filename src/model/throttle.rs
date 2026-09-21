@@ -12,7 +12,7 @@ impl Throttle {
     pub fn new(interval: Duration) -> Self {
         Self {
             interval,
-            last_update: Utc::now(),
+            last_update: DateTime::<Utc>::MIN_UTC,
         }
     }
 
@@ -65,11 +65,11 @@ impl<T> ThrottleQueue<T> {
     }
 
     pub fn push(&mut self, value: T) -> bool {
-        if !self.throttle.tick() {
+        if self.queue.len() >= self.capacity {
             return false;
         }
 
-        if self.queue.len() >= self.capacity {
+        if !self.throttle.tick() {
             return false;
         }
 

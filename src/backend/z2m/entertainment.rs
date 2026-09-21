@@ -15,18 +15,16 @@ use crate::error::ApiResult;
 
 pub struct EntStream {
     pub stream: EntertainmentZigbeeStream,
-    pub target: String,
     pub addrs: BTreeMap<String, Vec<u16>>,
     pub modes: Vec<(u16, LightRecordMode)>,
 }
 
 impl EntStream {
     #[must_use]
-    pub fn new(counter: u32, target: &str, addrs: BTreeMap<String, Vec<u16>>) -> Self {
+    pub fn new(counter: u32, addrs: BTreeMap<String, Vec<u16>>) -> Self {
         let modes = Self::addrs_to_light_modes(&addrs);
         Self {
             stream: EntertainmentZigbeeStream::new(counter),
-            target: target.to_string(),
             addrs,
             modes,
         }
@@ -100,6 +98,8 @@ impl EntStream {
     }
 
     pub async fn start_stream(&mut self, z2mws: &mut Z2mWebSocket) -> ApiResult<()> {
+        self.stop_stream(z2mws).await?;
+
         log::debug!("Entertainment addrs: {:#?}", &self.addrs);
         log::debug!("Entertainment modes: {:#?}", &self.modes);
         for (dev, segments) in &self.addrs {
@@ -113,8 +113,6 @@ impl EntStream {
             let mapping = self.stream.segment_mapping(segments)?;
             z2mws.send_zigbee_message(dev, &mapping).await?;
         }
-
-        self.stop_stream(z2mws).await?;
 
         Ok(())
     }
@@ -136,7 +134,20 @@ impl EntStream {
     ) -> ApiResult<()> {
         let blks = self.generate_frame(frame);
 
-        let message = self.stream.frame(blks)?;
-        z2mws.send_entertainment_frame(&self.target, &message).await
+        for (dev, segments) in &self.addrs {
+            let dev_blks: Vec<_> = blks
+                .iter()
+                .filter(|blk| segments.contains(&blk.addr()))
+                .cloned()
+                .collect();
+
+            if !dev_blks.is_empty() {
+                let message = self.stream.build_frame(dev_blks)?;
+                z2mws.send_entertainment_frame(dev, &message).await?;
+            }
+        }
+
+        self.stream.advance();
+        Ok(())
     }
 }

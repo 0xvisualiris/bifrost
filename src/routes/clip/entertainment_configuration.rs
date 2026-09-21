@@ -172,7 +172,11 @@ fn make_services(
 }
 
 fn find_bridge_entertainment(lock: &Resources) -> ApiResult<ResourceLink> {
-    let bridge_id = lock.get_resource_ids_by_type(RType::Bridge)[0];
+    let bridge_id = lock
+        .get_resource_ids_by_type(RType::Bridge)
+        .into_iter()
+        .next()
+        .ok_or(HueError::NotFound(Uuid::nil()))?;
 
     let bridge: &Bridge = lock.get_id(bridge_id)?;
 
@@ -214,13 +218,16 @@ pub async fn put_resource_id(state: &AppState, rlink: ResourceLink, put: Value) 
     if let Some(action) = &upd.action {
         let ent: &EntertainmentConfiguration = lock.get(&rlink)?;
         let svc = ent.light_services.clone();
+        let mode = match action {
+            EntertainmentConfigurationAction::Start => LightMode::Streaming,
+            EntertainmentConfigurationAction::Stop => LightMode::Normal,
+        };
 
-        lock.update::<Light>(&svc[0].rid, |light| {
-            light.mode = match action {
-                EntertainmentConfigurationAction::Start => LightMode::Streaming,
-                EntertainmentConfigurationAction::Stop => LightMode::Normal,
-            }
-        })?;
+        for light_link in &svc {
+            lock.update::<Light>(&light_link.rid, |light| {
+                light.mode = mode;
+            })?;
+        }
     }
 
     let bridge_ent = find_bridge_entertainment(&lock)?;
