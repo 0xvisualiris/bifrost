@@ -73,11 +73,7 @@ impl Z2mBackend {
         Ok(())
     }
 
-    async fn handle_button_action(
-        &mut self,
-        device_name: &str,
-        payload: &Value,
-    ) -> ApiResult<()> {
+    async fn handle_button_action(&mut self, device_name: &str, payload: &Value) -> ApiResult<()> {
         let Some(rlink) = self.map.get(device_name).copied() else {
             if !self.ignore.contains(device_name) {
                 log::debug!(
@@ -100,17 +96,24 @@ impl Z2mBackend {
         let button_link = {
             let lock = self.state.lock().await;
             let device = lock.get::<Device>(&rlink)?;
-            device.services.iter().find(|s| s.rtype == RType::Button).copied()
+            device
+                .services
+                .iter()
+                .find(|s| s.rtype == RType::Button)
+                .copied()
         };
 
         if let Some(btn_link) = button_link {
             let action = action.clone();
-            self.state.lock().await.update::<Button>(&btn_link.rid, |btn| {
-                btn.button.button_report = Some(ButtonReport {
-                    updated: Utc::now(),
-                    event: action.clone(),
-                });
-            })?;
+            self.state
+                .lock()
+                .await
+                .update::<Button>(&btn_link.rid, |btn| {
+                    btn.button.button_report = Some(ButtonReport {
+                        updated: Utc::now(),
+                        event: action.clone(),
+                    });
+                })?;
             log::info!("[{}] Button action: {} → {action}", self.name, device_name);
         }
 
