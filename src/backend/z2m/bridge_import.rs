@@ -174,7 +174,7 @@ impl Z2mBackend {
 
         let button = Button {
             owner: link_device,
-            metadata: ButtonMetadata { control_id: 0 },
+            metadata: ButtonMetadata { control_id: 1 },
             button: ButtonData {
                 button_report: None,
                 last_event: None,
@@ -184,7 +184,7 @@ impl Z2mBackend {
                     "repeat",
                     "short_release",
                     "long_release",
-                    "double_short_release"
+                    "long_press"
                 ])),
             },
         };
