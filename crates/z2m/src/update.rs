@@ -248,6 +248,7 @@ impl From<DeviceState> for On {
 #[derive(Copy, Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceEffect {
+    None,
     Blink,
     Breathe,
     Okay,

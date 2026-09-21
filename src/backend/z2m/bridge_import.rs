@@ -178,8 +178,14 @@ impl Z2mBackend {
             button: ButtonData {
                 button_report: None,
                 last_event: None,
-                repeat_interval: None,
-                event_values: None,
+                repeat_interval: Some(800),
+                event_values: Some(json!([
+                    "initial_press",
+                    "repeat",
+                    "short_release",
+                    "long_release",
+                    "double_short_release"
+                ])),
             },
         };
 
