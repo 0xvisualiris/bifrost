@@ -15,7 +15,6 @@ use crate::error::ApiResult;
 
 pub struct EntStream {
     pub stream: EntertainmentZigbeeStream,
-    pub target: String,
     pub addrs: BTreeMap<String, Vec<u16>>,
     pub channels: BTreeMap<u8, (u16, LightRecordMode)>,
 }
@@ -24,13 +23,11 @@ impl EntStream {
     #[must_use]
     pub fn new(
         counter: u32,
-        target: &str,
         addrs: BTreeMap<String, Vec<u16>>,
         channels: BTreeMap<u8, (u16, LightRecordMode)>,
     ) -> Self {
         Self {
             stream: EntertainmentZigbeeStream::new(counter),
-            target: target.to_string(),
             addrs,
             channels,
         }
@@ -119,7 +116,20 @@ impl EntStream {
     ) -> ApiResult<()> {
         let blks = self.generate_frame(frame);
 
-        let message = self.stream.frame(blks)?;
-        z2mws.send_entertainment_frame(&self.target, &message).await
+        for (dev, segments) in &self.addrs {
+            let dev_blks: Vec<_> = blks
+                .iter()
+                .filter(|blk| segments.contains(&blk.addr()))
+                .cloned()
+                .collect();
+
+            if !dev_blks.is_empty() {
+                let message = self.stream.build_frame(dev_blks)?;
+                z2mws.send_entertainment_frame(dev, &message).await?;
+            }
+        }
+
+        self.stream.advance();
+        Ok(())
     }
 }

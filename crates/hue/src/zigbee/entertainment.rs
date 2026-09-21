@@ -93,6 +93,11 @@ impl HueEntFrameLightRecord {
     }
 
     #[must_use]
+    pub const fn addr(&self) -> u16 {
+        self.addr
+    }
+
+    #[must_use]
     pub const fn raw(&self) -> [u8; 3] {
         self.raw
     }
