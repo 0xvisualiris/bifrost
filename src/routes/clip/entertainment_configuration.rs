@@ -143,7 +143,11 @@ fn make_services(
 }
 
 fn find_bridge_entertainment(lock: &Resources) -> ApiResult<ResourceLink> {
-    let bridge_id = lock.get_resource_ids_by_type(RType::Bridge)[0];
+    let bridge_id = lock
+        .get_resource_ids_by_type(RType::Bridge)
+        .into_iter()
+        .next()
+        .ok_or(HueError::NotFound(Uuid::nil()))?;
 
     let bridge: &Bridge = lock.get_id(bridge_id)?;
 

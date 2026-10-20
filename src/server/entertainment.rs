@@ -194,10 +194,8 @@ impl EntertainmentSocket {
             .await
             .map_err(|_| ApiError::EntStreamTimeout)??;
 
-        // read the first frame, and use it to look up area, color mode, etc.
-        // this means we discard the first frame, but since we expect at least
-        // 10 frames *per second*, this is acceptable.
-        let mut sz = Self::read_frame(&mut sess, &mut buf).await?;
+        // read the first frame to determine area and color mode, then discard it
+        let sz = Self::read_frame(&mut sess, &mut buf).await?;
         log::trace!("First entertainment frame: {}", hex::encode(&buf[..sz]));
         let raw = HueStreamPacket::parse(&buf[..sz])?;
 
@@ -213,7 +211,14 @@ impl EntertainmentSocket {
         let mut fps = 0;
         let mut period = Utc::now().timestamp();
 
+        // read the first frame that will actually be forwarded
+        let mut sz = Self::read_frame(&mut sess, &mut buf).await?;
+
         loop {
+            if sz == 0 {
+                break;
+            }
+
             let view = &buf[..sz];
             log::trace!("Packet buffer: {}", view.escape_ascii());
 
@@ -242,9 +247,6 @@ impl EntertainmentSocket {
             self.backend_updates.send(Arc::new(req)).ok();
 
             sz = Self::read_frame(&mut sess, &mut buf).await?;
-            if sz == 0 {
-                break;
-            }
         }
 
         Ok(())

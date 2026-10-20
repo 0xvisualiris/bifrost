@@ -140,19 +140,27 @@ impl EntertainmentZigbeeStream {
     }
 
     pub fn frame(&mut self, blks: Vec<HueEntFrameLightRecord>) -> HueResult<ZigbeeMessage> {
+        let msg = self.build_frame(blks)?;
+        self.advance();
+        Ok(msg)
+    }
+
+    pub fn build_frame(&self, blks: Vec<HueEntFrameLightRecord>) -> HueResult<ZigbeeMessage> {
         let ent = HueEntFrame {
             counter: self.counter,
             smoothing: self.smoothing,
             blks,
         };
 
-        self.counter += 1;
-
         Ok(ZigbeeMessage::new(
             Self::CLUSTER,
             Self::CMD_FRAME,
             ent.pack()?,
         ))
+    }
+
+    pub fn advance(&mut self) {
+        self.counter += 1;
     }
 }
 
