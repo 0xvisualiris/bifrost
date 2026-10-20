@@ -650,11 +650,7 @@ impl Z2mBackend {
 
         // virtual segment addresses must not collide with any device on the
         // zigbee network, or the light silently ignores the segment mapping
-        let mut used: BTreeSet<u16> = self
-            .network
-            .values()
-            .map(|d| d.network_address)
-            .collect();
+        let mut used: BTreeSet<u16> = self.network.values().map(|d| d.network_address).collect();
         let mut segment_addrs: BTreeMap<(u16, u16), u16> = BTreeMap::new();
 
         log::trace!("[{}] Resolving entertainment channels", self.name);
