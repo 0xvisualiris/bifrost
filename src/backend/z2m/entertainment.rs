@@ -116,6 +116,10 @@ impl EntStream {
     ) -> ApiResult<()> {
         let blks = self.generate_frame(frame);
 
+        // Hue lights repeat every entertainment frame they receive in
+        // broadcast mode, and drop frames with a counter they have already
+        // seen. Each device therefore needs its own counter value, otherwise
+        // only the first device in a cycle picks up its frame.
         for (dev, segments) in &self.addrs {
             let dev_blks: Vec<_> = blks
                 .iter()
@@ -124,12 +128,11 @@ impl EntStream {
                 .collect();
 
             if !dev_blks.is_empty() {
-                let message = self.stream.build_frame(dev_blks)?;
+                let message = self.stream.frame(dev_blks)?;
                 z2mws.send_entertainment_frame(dev, &message).await?;
             }
         }
 
-        self.stream.advance();
         Ok(())
     }
 }
