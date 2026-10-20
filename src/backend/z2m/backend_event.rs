@@ -648,6 +648,15 @@ impl Z2mBackend {
         let mut channels: BTreeMap<u8, (u16, LightRecordMode)> = BTreeMap::new();
         chans.sort_by_key(|c| c.channel_id);
 
+        // virtual segment addresses must not collide with any device on the
+        // zigbee network, or the light silently ignores the segment mapping
+        let mut used: BTreeSet<u16> = self
+            .network
+            .values()
+            .map(|d| d.network_address)
+            .collect();
+        let mut segment_addrs: BTreeMap<(u16, u16), u16> = BTreeMap::new();
+
         log::trace!("[{}] Resolving entertainment channels", self.name);
         for chan in chans {
             for member in &chan.members {
@@ -664,10 +673,15 @@ impl Z2mBackend {
                     .get(topic)
                     .ok_or(HueError::NotFound(member.service.rid))?;
 
-                let segment_addr = dev
-                    .network_address
-                    .checked_add(member.index)
-                    .ok_or(HueError::HueZigbeeEncodeError)?;
+                let segment_addr = *segment_addrs
+                    .entry((dev.network_address, member.index))
+                    .or_insert_with(|| {
+                        EntStream::allocate_segment_addr(
+                            dev.network_address,
+                            member.index,
+                            &mut used,
+                        )
+                    });
 
                 addrs
                     .entry(dev.friendly_name.clone())
