@@ -33,12 +33,17 @@ impl EntStream {
         }
     }
 
+    /// First virtual zigbee address handed out to segments beyond the first.
+    pub const SEGMENT_ADDR_BASE: u16 = 0xA000;
+
     /// Pick the virtual zigbee address for segment `index` of a light.
     ///
-    /// Segment 0 uses the light's own network address. Other segments start
-    /// at `network_address + index` and skip every address in `used` (other
-    /// devices on the network, or segments already allocated), since a light
-    /// ignores a segment mapping that contains an address already in use.
+    /// Segment 0 uses the light's own network address. Other segments get the
+    /// next free address from `SEGMENT_ADDR_BASE` upwards, skipping every
+    /// address in `used` (devices on the network, or segments already
+    /// allocated). A light ignores the whole segment mapping if it rejects any
+    /// address in it, and gradient strips have been observed to reject
+    /// `network_address + index` even though no device uses those addresses.
     #[must_use]
     pub fn allocate_segment_addr(
         network_address: u16,
@@ -50,7 +55,7 @@ impl EntStream {
             return network_address;
         }
 
-        let mut addr = network_address.wrapping_add(index);
+        let mut addr = Self::SEGMENT_ADDR_BASE;
         // 0x0000 is the coordinator, 0xFFF8.. are reserved/broadcast addresses
         while addr == 0x0000 || addr >= 0xFFF8 || used.contains(&addr) {
             log::debug!("Segment address {addr:04x} is in use, skipping");
@@ -180,33 +185,33 @@ mod tests {
     }
 
     #[test]
-    fn segment_addr_follows_network_address_when_free() {
-        let mut used = BTreeSet::from([0x0bfb]);
+    fn segment_addr_allocates_from_base() {
+        let mut used = BTreeSet::from([0x0bfb, 0x9288]);
 
         let addr = EntStream::allocate_segment_addr(0x0bfb, 1, &mut used);
-        assert_eq!(addr, 0x0bfc);
+        assert_eq!(addr, 0xa000);
         let addr = EntStream::allocate_segment_addr(0x0bfb, 2, &mut used);
-        assert_eq!(addr, 0x0bfd);
+        assert_eq!(addr, 0xa001);
+        let addr = EntStream::allocate_segment_addr(0x9288, 1, &mut used);
+        assert_eq!(addr, 0xa002);
+        let addr = EntStream::allocate_segment_addr(0x9288, 2, &mut used);
+        assert_eq!(addr, 0xa003);
     }
 
     #[test]
     fn segment_addr_skips_addresses_in_use() {
-        // 0x9289 belongs to another device on the network
-        let mut used = BTreeSet::from([0x9288, 0x9289]);
+        // 0xa000 belongs to another device on the network
+        let mut used = BTreeSet::from([0x9288, 0xa000]);
 
         let addr = EntStream::allocate_segment_addr(0x9288, 1, &mut used);
-        assert_eq!(addr, 0x928a);
-        let addr = EntStream::allocate_segment_addr(0x9288, 2, &mut used);
-        assert_eq!(addr, 0x928b);
+        assert_eq!(addr, 0xa001);
     }
 
     #[test]
-    fn segment_addr_skips_reserved_and_coordinator_addresses() {
-        let mut used = BTreeSet::from([0xfff6]);
+    fn segment_addr_never_uses_coordinator_or_reserved_addresses() {
+        let mut used: BTreeSet<u16> = (EntStream::SEGMENT_ADDR_BASE..0xfff8).collect();
 
-        let addr = EntStream::allocate_segment_addr(0xfff6, 1, &mut used);
-        assert_eq!(addr, 0xfff7);
-        let addr = EntStream::allocate_segment_addr(0xfff6, 2, &mut used);
+        let addr = EntStream::allocate_segment_addr(0x1234, 1, &mut used);
         assert_eq!(addr, 0x0001);
     }
 }
